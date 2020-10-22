@@ -1,4 +1,4 @@
-*! psacalc 2.2 15OCT2020
+*! psacalc
 
 
 program psacalc2, rclass
@@ -50,15 +50,15 @@ program psacalc2, rclass
 
 	* If areg, get absorbed
 	if "`command'"=="areg" {
-		loc absorb=e(absvar)
-		loc absorb = "absorb(`absorb')"
+		local absorb=e(absvar)
+		local absorb = "absorb(`absorb')"
 	}
 
 		* If reghdfe, get absorbed
 	if "`command'"=="reghdfe" {
-		loc absorb=e(absvars)
-		loc absorb = "absorb(`absorb')"
-    loc residuals= "residuals" // reghdfe requires this option to post est 'predict, d'
+		local absorb=e(absvars)
+		local absorb = "absorb(`absorb')"
+    local residuals= "residuals" // reghdfe requires this option to post est 'predict, d'
 	}
 
 
@@ -83,9 +83,10 @@ program psacalc2, rclass
 		exit 5001
 	}
 
-	// No controls
-	if `words'==2 & strpos("`names'","_cons")!=0 & strpos("`names'","`treatment'")!=0  {
-		di as error "Model does not have controls"
+	// No controls TODO add check for FE
+	if `words'==2 & "`absorb'"=="" /// fail if no controls or absorbed effects
+		& strpos("`names'","_cons")!=0 & strpos("`names'","`treatment'")!=0  {
+		di as error "Model has neither controls nor absorbed effects treated as controls"
 		exit 5001
 	}
 
