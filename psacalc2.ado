@@ -1,10 +1,10 @@
 *! psacalc
-
+// TODO: add support for noabsorb option in reghdfe
 
 program psacalc2, rclass
 
 	version 11.2
-	syntax anything [, mcontrol(string) rmax(real 1.0) delta(real 1.0) beta(real 0) model(string)]
+	syntax anything [, mcontrol(string) rmax(real 1.0) delta(real 1.0) beta(real 0) model(string) mcontrolFE(string)]
 
 	* Get treatment var and type of calculation
 
@@ -58,6 +58,9 @@ program psacalc2, rclass
 	if "`command'"=="reghdfe" {
 		local absorb=e(absvars)
 		local absorb = "absorb(`absorb')"
+		local cluster = e(clustvar)
+		if "`cluster'"!="." local cluster = "cluster(`cluster')"
+		if "`cluster'"=="." local cluster = ""
     local residuals= "residuals" // reghdfe requires this option to post est 'predict, d'
 	}
 
@@ -69,6 +72,7 @@ program psacalc2, rclass
 	===========================================================================*/
 
 	local names: colnames e(b)
+	local names `names' `e(absvars)' // added absorbed variables to the list
 	loc words: word count `names'
 
 	// Delta ignored if requesting delta and entered delta!=1
@@ -159,9 +163,12 @@ program psacalc2, rclass
 
 		/// mcontrols not in initial controls
 		loc clist="`names'"
-		loc cmmc: list clist - mclist
+		local mclist_no_i = subinstr("`mclist'", "i.", "",.)
+		loc cmmc: list clist - mclist_no_i
 		if "`cmmc'"=="`clist'" {
-			di as err "Unrelated control not in regression"
+		//NB: this test only catches when NONE of the unrelated controls are in the regression, 
+		//    not when SOME are not in the regression. This is how the Oster & Perez version works
+			di as err "Unrelated controls not in regression"
 			exit 5001
 		}
 	}
@@ -179,10 +186,22 @@ program psacalc2, rclass
 	loc cons "_cons"
 	loc indepvars: list indepvars - cons
 
-	if "`command'"=="areg" | "`command'"=="reghdfe" loc command2 = "reg" // treat "areg" and "reghdfe" the same
+	// the original version of psacalc2 just treated reghdfe and areg as equivalent, which they are for our purposes
+	// if "`command'"=="areg" | "`command'"=="reghdfe" loc command2 = "reg" // original approach
+	if "`command'"=="areg" loc command2 = "reg"
+	if "`command'"=="reghdfe" loc command2 = "reghdfe"
+	if "`command'"=="reghdfe" & inlist(strlower("`mcontrolFE'"),"yes","y")==1 loc command2 = "reghdfe"
 	else loc command2="`command'"
-
-	quietly `command2' `depvar' `treatment' `mcontrol' [`weight'] if `touse', `fetype'
+	*--- This runs the main model ---*
+	if "`command2'" == "reghdfe" & inlist(strlower("`mcontrolFE'"),"yes","y")==1 {
+		quietly `command2' `depvar' `treatment' `mcontrol' [`weight'] if `touse', `fetype' `cluster' `absorb' `residuals'
+	}
+	else if "`command2'" == "reghdfe" & inlist(strlower("`mcontrolFE'"),"yes","y")!=1 {
+		quietly `command2' `depvar' `treatment' `mcontrol' [`weight'] if `touse', `fetype' `cluster' noabsorb `residuals'
+	}
+	else {
+		quietly `command2' `depvar' `treatment' `mcontrol' [`weight'] if `touse', `fetype'
+	}
 
 	scalar `beta_o'=_b[`treatment']
 	scalar `r_o'=e(r2)
@@ -199,7 +218,6 @@ program psacalc2, rclass
 
 	* Check if treatment is factor variable, build if necessary
 
-
 	cap reg `treatment'
 	if _rc==198	{
 		tempvar treat2
@@ -209,10 +227,14 @@ program psacalc2, rclass
 		loc treat2="`treatment'"
 	}
 
-	* Weigths go here because they affect the calculation of the mean
+	* Weigths go here because they affect the calculation of the mean of treatment
 	* Fixed effects go here because we are using the variance of the treatment in the differenced regression
-
-	quietly `command2' `treat2' `mcontrol' [`weight'] if `touse', `fetype'
+	if "`command2'" == "reghdfe" &  {
+		quietly `command2' `treat2' `mcontrol' [`weight'] if `touse', `fetype' `cluster' `absorb' `residuals'
+	}
+	else {
+		quietly `command2' `treat2' `mcontrol' [`weight'] if `touse', `fetype'
+	}
 	quietly predict `treat_res' if `touse', `res'
 
 	quietly sum `treat_res'  if `touse'
@@ -220,9 +242,9 @@ program psacalc2, rclass
 
 	* Rest includes mcontrol
 	* For areg, this regression must absorb fe
-  * For reghdfe,
+	* For reghdfe, must also absorb fe and cluster
 	local rest: list indepvars - treatment
-	quietly `command' `treat2' `rest' [`weight'] if `touse', `fetype' `absorb' `residuals'
+	quietly `command' `treat2' `rest' [`weight'] if `touse', `fetype' `cluster' `absorb' `residuals'
 	quietly predict `error_hat' if `touse', `res'
 	quietly sum `error_hat' if `touse'
 	quietly {
@@ -330,6 +352,12 @@ program psacalc2, rclass
 
 		return scalar delta=boundx
 		return scalar beta=`beta'
+		return scalar uncontCoef = `beta_o'
+		return scalar uncontR2 = `r_o'
+		return scalar contCoef = `beta_tilde'
+		return scalar contR2 = `r_tilde'
+		return scalar diffCoef = `beta_tilde'-`beta_o'
+		return scalar diffR2 = `r_tilde'-`r_o'
 	}
 
 	return scalar rmax=`rmax'

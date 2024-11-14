@@ -37,7 +37,7 @@ reghdfe y x1 x2, absorb(id)
 psacalc2 delta x1, mcontrol(x2)
 ```
 
-All my edits are based on the assumption that the <img src="https://render.githubusercontent.com/render/math?math=R^2">s calculated by `areg` and `reghdfe` are comparable researchers users should always verify that any estimation software is doing what they think it is before proceeding. Which is to say, any errors in my edits are my own, but you own any errors of your own.
+All my edits are based on the assumption that the <img src="https://render.githubusercontent.com/render/math?math=R^2">s calculated by `areg` and `reghdfe` are comparable researchers should always verify that any estimation software is doing what they think it is before proceeding. Which is to say, any errors in my edits are my own, but you own any errors of your own.
 
 I welcome any comments or improvements.
 
