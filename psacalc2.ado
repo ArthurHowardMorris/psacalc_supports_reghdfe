@@ -1,5 +1,4 @@
 *! psacalc
-// TODO: add support for noabsorb option in reghdfe
 
 program psacalc2, rclass
 
